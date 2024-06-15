@@ -10,6 +10,8 @@ import android.util.AttributeSet
 import android.util.Size
 import android.view.View
 import com.xiaohaoo.yolo.util.DetectorUtils
+import kotlin.math.max
+import kotlin.math.min
 
 class OverlayView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -66,10 +68,9 @@ class OverlayView(context: Context, attrs: AttributeSet?) : View(context, attrs)
 
 
     fun event(inputSize: Size, imageSize: Size, boundingBoxList: List<DetectorUtils.Companion.BoundingBox>?) {
-        this.inputScaleFactor = 1.0f / Math.min(inputSize.width.toFloat() / imageSize.width.toFloat(), inputSize.height.toFloat() / imageSize.height.toFloat())
-        (width.toFloat() / imageSize.width).coerceAtMost(height.toFloat() / imageSize.height).also {
-            this.scaleFactor = Pair(it, it)
-        }
+        this.inputScaleFactor = 1.0f / min(inputSize.width.toFloat() / imageSize.width.toFloat(), inputSize.height.toFloat() / imageSize.height.toFloat())
+        val s = max(width.toFloat() / imageSize.width, height.toFloat() / imageSize.height)
+        this.scaleFactor = Pair(s, s)
         this.inputSize = inputSize
         this.boundingBoxList = boundingBoxList
         invalidate()
