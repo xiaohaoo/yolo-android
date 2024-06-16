@@ -25,6 +25,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.xiaohaoo.yolo.databinding.ActivityMainBinding
 import com.xiaohaoo.yolo.util.DetectorUtils
 import kotlinx.coroutines.Dispatchers
@@ -52,40 +53,16 @@ class MainActivity : AppCompatActivity() {
         Executors.newSingleThreadExecutor()
     }
 
-    private val interpreter by lazy {
-        Interpreter(FileUtil.loadMappedFile(this, "yolov8n_float32.tflite"), Interpreter.Options().apply {
-            numThreads = Runtime.getRuntime().availableProcessors()
-            addDelegate(GpuDelegate())
-        })
-    }
+    private lateinit var interpreter: Interpreter;
+
+    private val inputSize = Size(640, 640)
+    private var imageSize = Size(720, 1280)
+    private lateinit var imageProcessor: ImageProcessor;
 
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContentView(binding.root)
-        WindowCompat.getInsetsController(window, window.decorView).also {
-            it.isAppearanceLightStatusBars = false
-        }
-        val permissions = PERMISSIONS.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
-        if (permissions.isNotEmpty()) {
-            requestPermissions(permissions.toTypedArray(), 0)
-        }
-        for (i in 0 until interpreter.inputTensorCount) {
-            val tensor = interpreter.getInputTensor(i)
-            Log.d(TAG, "Input Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
-        }
-        for (i in 0 until interpreter.outputTensorCount) {
-            val tensor = interpreter.getOutputTensor(i)
-            Log.d(TAG, "Output Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
-        }
-        OverlayView.LABELS = FileUtil.loadLabels(this, "labels.txt")
-        val inputSize = Size(640, 640)
-        val imageSize = Size(720, 1280)
-
+    private fun updateProcessParam() {
         val scaleFactor = Math.min(inputSize.width.toFloat() / imageSize.width.toFloat(), inputSize.height.toFloat() / imageSize.height.toFloat())
-
-        val imageProcessor = ImageProcessor.Builder()
+        imageProcessor = ImageProcessor.Builder()
             .add(ResizeOp((imageSize.height * scaleFactor).toInt(), (imageSize.width * scaleFactor).toInt(), ResizeOp.ResizeMethod.BILINEAR))
             .add(object : ImageOperator {
                 override fun apply(image: TensorImage): TensorImage {
@@ -110,6 +87,35 @@ class MainActivity : AppCompatActivity() {
                     return PointF(point.x * x, point.y * y)
                 }
             }).add(NormalizeOp(0.0f, 255.0f)).add(CastOp(DataType.FLOAT32)).build()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContentView(binding.root)
+        WindowCompat.getInsetsController(window, window.decorView).also {
+            it.isAppearanceLightStatusBars = false
+        }
+        val permissions = PERMISSIONS.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (permissions.isNotEmpty()) {
+            requestPermissions(permissions.toTypedArray(), 0)
+        }
+        val dialog = MaterialAlertDialogBuilder(this@MainActivity).setTitle("提示").setMessage("模型加载中...").setCancelable(false).show()
+        interpreter = Interpreter(FileUtil.loadMappedFile(this@MainActivity, "yolov8n_int8.tflite"), Interpreter.Options().apply {
+            numThreads = Runtime.getRuntime().availableProcessors()
+            addDelegate(GpuDelegate())
+        })
+        updateProcessParam()
+        OverlayView.LABELS = FileUtil.loadLabels(this@MainActivity, "labels.txt")
+        for (i in 0 until interpreter.inputTensorCount) {
+            val tensor = interpreter.getInputTensor(i)
+            Log.d(TAG, "Input Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
+        }
+        for (i in 0 until interpreter.outputTensorCount) {
+            val tensor = interpreter.getOutputTensor(i)
+            Log.d(TAG, "Output Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
+        }
+        dialog.hide()
 
         val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val characteristics = manager.getCameraCharacteristics("1")
@@ -122,26 +128,30 @@ class MainActivity : AppCompatActivity() {
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
             val resolutionSelector = ResolutionSelector.Builder()
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
-                .setResolutionStrategy(ResolutionStrategy(inputSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
-                .build()
+                .setResolutionStrategy(ResolutionStrategy(inputSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER)).build()
 
             val preview = Preview.Builder()
                 .setTargetRotation(binding.previewView.display.rotation)
-                .setResolutionSelector(resolutionSelector)
-                .build().also { it.setSurfaceProvider(binding.previewView.surfaceProvider) }
+                .setResolutionSelector(resolutionSelector).build()
+                .also { it.setSurfaceProvider(binding.previewView.surfaceProvider) }
+
             val imageAnalysis = ImageAnalysis.Builder()
                 .setTargetRotation(binding.previewView.display.rotation)
                 .setResolutionSelector(resolutionSelector)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also {
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
+                .also {
                     it.setAnalyzer(imageAnalysisExecutor) {
                         Log.d(
-                            TAG,
-                            "Camera Image: Size: ${it.width} × ${it.height} Format: ${it.format}"
+                            TAG, "Camera Image: Size: ${it.width} × ${it.height} Format: ${it.format} Rotation: ${it.imageInfo.rotationDegrees}"
                         )
                         val matrix = Matrix().apply { postRotate(it.imageInfo.rotationDegrees.toFloat()) }
                         val bitmap = Bitmap.createBitmap(it.toBitmap(), 0, 0, it.width, it.height, matrix, true)
                         it.close()
+                        if (bitmap.width != imageSize.width || bitmap.height != imageSize.height) {
+                            this.imageSize = Size(bitmap.width, bitmap.height)
+                            updateProcessParam()
+                        }
                         Log.d(TAG, "Input Image: Size: ${bitmap.width} × ${bitmap.height} Format: ${bitmap.colorSpace}")
                         val input = imageProcessor.process(TensorImage.fromBitmap(bitmap))
                         val output = TensorBuffer.createFixedSize(intArrayOf(1, 84, 8400), DataType.FLOAT32)
