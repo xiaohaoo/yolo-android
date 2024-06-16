@@ -4,10 +4,11 @@ This Android application uses the YOLOv8 model implemented in TensorFlow Lite (T
 
 ## Branches
 
-- **main (Kotlin):** The main branch contains the Kotlin-only version of the application. It provides a native Kotlin experience for developers and users.
+- **[main](https://github.com/xiaohaoo/yolo-android/tree/main) (Kotlin):** The main branch contains the Kotlin-only version of the application. It provides a
+  native Kotlin experience for developers and users.
 
-- **dev (JNI C++):** The dev branch includes additional functionalities or optimizations implemented using C++ code through the Java Native Interface (JNI).
-  This version may offer improved performance or access to native features.
+- **[dev](https://github.com/xiaohaoo/yolo-android/tree/dev) (JNI C++):** The dev branch includes additional functionalities or optimizations implemented using
+  C++ code through the Java Native Interface (JNI). This version may offer improved performance or access to native features.
 
 ## Features
 
@@ -68,4 +69,3 @@ For detailed model conversion and optimization steps, refer to the official Tens
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
