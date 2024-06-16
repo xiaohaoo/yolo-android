@@ -31,8 +31,6 @@ import com.xiaohaoo.yolo.util.DetectorUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.tensorflow.lite.DataType
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.ops.CastOp
 import org.tensorflow.lite.support.common.ops.NormalizeOp
@@ -41,6 +39,7 @@ import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 
 
@@ -53,7 +52,6 @@ class MainActivity : AppCompatActivity() {
         Executors.newSingleThreadExecutor()
     }
 
-    private lateinit var interpreter: Interpreter;
 
     private val inputSize = Size(640, 640)
     private var imageSize = Size(720, 1280)
@@ -101,22 +99,10 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(permissions.toTypedArray(), 0)
         }
         val dialog = MaterialAlertDialogBuilder(this@MainActivity).setTitle("提示").setMessage("模型加载中...").setCancelable(false).show()
-        interpreter = Interpreter(FileUtil.loadMappedFile(this@MainActivity, "yolov8n_int8.tflite"), Interpreter.Options().apply {
-            numThreads = Runtime.getRuntime().availableProcessors()
-            addDelegate(GpuDelegate())
-        })
+        initialize(this)
         updateProcessParam()
         OverlayView.LABELS = FileUtil.loadLabels(this@MainActivity, "labels.txt")
-        for (i in 0 until interpreter.inputTensorCount) {
-            val tensor = interpreter.getInputTensor(i)
-            Log.d(TAG, "Input Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
-        }
-        for (i in 0 until interpreter.outputTensorCount) {
-            val tensor = interpreter.getOutputTensor(i)
-            Log.d(TAG, "Output Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
-        }
         dialog.hide()
-
         val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val characteristics = manager.getCameraCharacteristics("1")
         val configMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
@@ -155,7 +141,7 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "Input Image: Size: ${bitmap.width} × ${bitmap.height} Format: ${bitmap.colorSpace}")
                         val input = imageProcessor.process(TensorImage.fromBitmap(bitmap))
                         val output = TensorBuffer.createFixedSize(intArrayOf(1, 84, 8400), DataType.FLOAT32)
-                        interpreter.run(input.buffer, output.buffer)
+                        run(input.buffer, output.buffer)
                         lifecycleScope.launch(Dispatchers.IO) {
                             val boundingBoxList = DetectorUtils.boundingBox(output.floatArray)
                             runOnUiThread {
@@ -173,7 +159,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         imageAnalysisExecutor.shutdown()
-        interpreter.close()
+        finalize()
     }
 
     companion object {
@@ -181,6 +167,8 @@ class MainActivity : AppCompatActivity() {
         private val PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
         private external fun initialize(context: Context)
+        private external fun finalize()
+        private external fun run(input: ByteBuffer, output: ByteBuffer)
 
         init {
             System.loadLibrary("yolo");
