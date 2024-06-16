@@ -44,6 +44,8 @@ import java.util.concurrent.Executors
 
 
 class MainActivity : AppCompatActivity() {
+
+
     private val binding: ActivityMainBinding by lazy {
         ActivityMainBinding.inflate(layoutInflater)
     }
@@ -79,12 +81,14 @@ class MainActivity : AppCompatActivity() {
             val tensor = interpreter.getOutputTensor(i)
             Log.d(TAG, "Output Tensor: Name: ${tensor.name()}, Shape: ${tensor.shape().contentToString()}, DataType: ${tensor.dataType()}")
         }
+
+        initialize(this)
+
         OverlayView.LABELS = FileUtil.loadLabels(this, "labels.txt")
         val inputSize = Size(640, 640)
         val imageSize = Size(720, 1280)
 
         val scaleFactor = Math.min(inputSize.width.toFloat() / imageSize.width.toFloat(), inputSize.height.toFloat() / imageSize.height.toFloat())
-
         val imageProcessor = ImageProcessor.Builder()
             .add(ResizeOp((imageSize.height * scaleFactor).toInt(), (imageSize.width * scaleFactor).toInt(), ResizeOp.ResizeMethod.BILINEAR))
             .add(object : ImageOperator {
@@ -169,5 +173,10 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private val PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+        private external fun initialize(context: Context)
+
+        init {
+            System.loadLibrary("yolo");
+        }
     }
 }
