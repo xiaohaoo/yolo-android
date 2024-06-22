@@ -82,9 +82,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun inverseTransform(point: PointF, inputImageHeight: Int, inputImageWidth: Int): PointF {
-                    val x = inputImageWidth.toFloat() / inputSize.width
-                    val y = inputImageHeight.toFloat() / inputSize.height
-                    return PointF(point.x * x, point.y * y)
+                    return PointF(point.x * inputImageWidth.toFloat() / inputSize.width, point.y * inputImageHeight.toFloat() / inputSize.height)
                 }
             }).add(NormalizeOp(0.0f, 255.0f)).add(CastOp(DataType.FLOAT32)).build()
     }
