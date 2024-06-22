@@ -140,9 +140,6 @@ class MainActivity : AppCompatActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
                 .also {
                     it.setAnalyzer(imageAnalysisExecutor) {
-                        Log.d(
-                            TAG, "Camera Image: Size: ${it.width} × ${it.height} Format: ${it.format} Rotation: ${it.imageInfo.rotationDegrees}"
-                        )
                         val matrix = Matrix().apply { postRotate(it.imageInfo.rotationDegrees.toFloat()) }
                         val bitmap = Bitmap.createBitmap(it.toBitmap(), 0, 0, it.width, it.height, matrix, true)
                         it.close()
