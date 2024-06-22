@@ -12,6 +12,7 @@ import android.hardware.camera2.CameraManager
 import android.os.Bundle
 import android.util.Log
 import android.util.Size
+import android.view.OrientationEventListener
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -58,6 +59,20 @@ class MainActivity : AppCompatActivity() {
     private val inputSize = Size(640, 640)
     private var imageSize = Size(720, 1280)
     private lateinit var imageProcessor: ImageProcessor;
+
+    private lateinit var imageAnalysis: ImageAnalysis
+    private lateinit var preview: Preview
+
+    private val orientationEventListener by lazy {
+        object : OrientationEventListener(this) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation != ORIENTATION_UNKNOWN) {
+                    imageAnalysis.targetRotation = binding.previewView.display.rotation
+                    preview.targetRotation = binding.previewView.display.rotation
+                }
+            }
+        }
+    }
 
 
     private fun updateProcessParam() {
@@ -128,12 +143,12 @@ class MainActivity : AppCompatActivity() {
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
                 .setResolutionStrategy(ResolutionStrategy(inputSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER)).build()
 
-            val preview = Preview.Builder()
+            preview = Preview.Builder()
                 .setTargetRotation(binding.previewView.display.rotation)
                 .setResolutionSelector(resolutionSelector).build()
                 .also { it.setSurfaceProvider(binding.previewView.surfaceProvider) }
 
-            val imageAnalysis = ImageAnalysis.Builder()
+            imageAnalysis = ImageAnalysis.Builder()
                 .setTargetRotation(binding.previewView.display.rotation)
                 .setResolutionSelector(resolutionSelector)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
@@ -162,13 +177,15 @@ class MainActivity : AppCompatActivity() {
             val useCaseGroup = UseCaseGroup.Builder().addUseCase(preview).addUseCase(imageAnalysis).setViewPort(binding.previewView.viewPort!!).build()
             cameraProvider.unbindAll()
             val camera = cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, useCaseGroup)
+            orientationEventListener.enable()
         }, ContextCompat.getMainExecutor(this))
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onStop() {
+        super.onStop()
         imageAnalysisExecutor.shutdown()
         interpreter.close()
+        orientationEventListener.disable()
     }
 
     companion object {
